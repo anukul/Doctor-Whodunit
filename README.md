@@ -1,78 +1,266 @@
-# Mission: Doctor Whodunit
+# Doctor Whodunit
+
+> Every fault leaves evidence. Solve the case.
 
 ## The Challenge
-Something in the vehicle just failed - whodunit?
 
-Travel your system timeline, inject faults you have seen before (or expect in the future), and let the evidence tell the story.
+Something in the vehicle just failed — whodunit?
 
-In this challenge, teams build a Safety Evidence Factory around the Battery Thermal Guardian: an EV thermal-runaway early-warning service. Regulations require that occupants are warned minutes before a battery thermal event becomes dangerous. A stale, stuck, delayed, or implausible cell-temperature signal can silently disarm that warning chain.
+Travel your system's timeline: inject faults you've seen before or expect in the future, and let the evidence tell the story.
 
-Your job is to make that failure visible, diagnosable, and provable.
+Build a safety evidence factory around the Battery Thermal Guardian — an EV thermal-runaway early-warning service. Regulations require occupants be warned minutes before a battery thermal event turns dangerous, so a stale or stuck cell-temperature signal silently disarms the entire warning chain.
+
+Run the Guardian on an AutoSD-based runtime, supervised by Ankaios, exchanging heartbeat, fault, and mitigation events over uProtocol, with diagnostic truth exposed through OpenSOVD. openDuT replays repeatable fault campaigns at three levels — delayed or duplicated messages, stuck or implausible VSS signals, even device-level sensor dropout — while your evidence collector links hazard → safety goal → injected fault → detection → mitigation → verdict for every test, packaged as a reusable SDV Blueprint.
+
+Doctor Whodunit is therefore not only a detection challenge. It is an evidence challenge. For every scenario, your team should be able to show what fault was injected, what the system observed, which mitigation was triggered, and why the final verdict is PASS, FAIL, or INCONCLUSIVE.
+
+The challenge is designed for software-defined vehicles, so portability and repeatability are part of the core problem. The same Guardian logic should stay valid as your environment evolves from pure simulation to more realistic setups.
 
 ## Your Mission
-- Build and run the Battery Thermal Guardian on an AutoSD-based runtime.
-- Supervise services and recovery behavior with Eclipse Ankaios.
-- Exchange heartbeat, fault, and mitigation events over Eclipse uProtocol.
-- Expose diagnostic truth across layers through Eclipse OpenSOVD.
-- Execute repeatable fault campaigns with openDuT.
-- Produce traceable safety evidence that links:
-  - hazard -> safety goal -> injected fault -> detection -> mitigation -> verdict
-- Package your setup and evidence process as a reusable SDV Blueprint.
 
-## Challenge Summary
-The challenge focuses on continuous safety validation under realistic failure conditions.
+Build a portable Safety Evidence Factory around the Battery Thermal Guardian.
 
-Participants inject faults at multiple levels and verify whether the warning chain still meets safety intent:
-- Communication-level faults: delayed, dropped, duplicated, or reordered messages.
-- Signal-level faults: stuck or implausible VSS temperature values.
-- Device-level faults: sensor dropout or data-source interruption.
+A strong solution demonstrates repeatable fault campaigns, correct Guardian behavior, clear diagnostics, and evidence-backed verdicts that another team can reproduce.
 
-The expected outcome is not just detection logic, but defensible evidence for every test run.
+## Target Architecture
 
-## Reference Architecture Scope
-### In-Scope Runtime Layers
-- Safety Application: Battery Thermal Guardian service logic.
-- Communications: uProtocol event exchange.
-- Middleware/Orchestration: Ankaios lifecycle and recovery control.
-- OS Runtime: AutoSD/Linux container runtime.
-- Diagnostics: OpenSOVD visibility across layers.
+The key architecture rule is simple:
 
-### Evidence and Test Harness
-- Fault campaigns executed by openDuT.
-- Scenario definitions for repeatable replay.
-- Evidence collector that correlates telemetry, diagnostics, and verdicts.
-- Exportable, machine-readable results suitable for audit and scoring.
+VSS data must pass through a uProtocol service interface before reaching the Guardian.
 
-## Key Technologies and Projects
-- [openDuT](https://github.com/eclipse-opendut/opendut)
-- [Eclipse uProtocol](https://uprotocol.org/)
-- [Eclipse Ankaios](https://eclipse-ankaios.github.io/ankaios/)
-- [Eclipse OpenSOVD](https://github.com/eclipse-opensovd)
-- [AutoSD](https://sig.centos.org/automotive/autosd-10/)
-- [S-CORE](https://eclipse.dev/score/)
+Guardian should not be tightly coupled to direct Data Broker reads.
+
+```mermaid
+flowchart LR
+  SRC[ASC replay or AZ3166 ThreadX source] --> CANP[KUKSA CAN Provider]
+  CANP --> KDB[KUKSA Data Broker]
+  KDB --> VSSUP[VSS uProtocol Publisher Service]
+  VSSUP -->|uProtocol publish| G[Battery Thermal Guardian]
+
+  OD[openDuT remote orchestration] --> FI[Fault campaign runner]
+  FI -->|inject signal faults| VSSUP
+  FI -->|inject transport faults| UBUS[uProtocol channels]
+
+  G -->|state, fault, mitigation events| UBUS
+  G --> DFM[DFM fault records]
+  DFM --> SOVD[OpenSOVD]
+
+  UBUS --> EV[Evidence collector]
+  SOVD --> EV
+```
+
+This keeps service contracts stable while allowing transport and deployment details to change without rewriting business logic.
+
+## Building Blocks
+
+Your implementation should connect the following building blocks into one coherent flow:
+
+| Layer | Component | Role |
+|-------|-----------|------|
+| **Source** | CAN `.asc` replay (or AZ3166 + ThreadX) | Temperature signal origin |
+| **Decode** | KUKSA CAN Provider → Data Broker | CAN-to-VSS mapping |
+| **Publish** | VSS uProtocol Publisher | Exposes mapped values over uProtocol |
+| **Evaluate** | Battery Thermal Guardian (Rust) | Thermal risk state machine |
+| **Orchestrate** | Ankaios | Workload lifecycle, AutoSD HPC target |
+| **Diagnose** | DFM → OpenSOVD | Fault records and diagnostic exposure |
+| **Campaign** | openDuT | Remote, repeatable fault injection |
+| **Collect** | Evidence collector | Correlates metadata → events → diagnostics → verdict |
+
+## Development Journey
+
+Build incrementally instead of trying to solve everything at once.
+
+**Phase 0 — Align**
+> Agree on signal names, units, event contracts, campaign metadata, and verdict schema.  
+> Early alignment prevents most late-stage integration issues.
+
+**Phase 1 — Baseline**
+> Make the nominal path work end-to-end:
+>
+> `source` → `KUKSA CAN Provider` → `Data Broker` → `VSS uProtocol Publisher` → `Guardian`
+>
+> Focus on: scaling correctness, timestamp monotonicity, stable state transitions.
+
+**Phase 2 — Fault Campaigns**
+> - Introduce one transport fault and one signal fault
+> - Add source faults and combined scenarios
+> - Measure detection latency, mitigation timing, and state behavior per run
+
+**Phase 3 — Diagnostics Correlation**
+> - Verify DFM records are created for each faulted scenario
+> - Confirm OpenSOVD exposes matching diagnostics
+> - Tie runtime events back with correlation identifiers
+
+**Phase 4 — Remote Reruns**
+> - Execute selected scenarios remotely with openDuT
+> - Compare verdict consistency across reruns
+
+**Phase 5 — Orchestrated Demo**
+> - Run full system under Ankaios orchestration
+> - Demonstrate restart/recovery without breaking evidence integrity
+
+## Suggested Guardian Behavior
+
+Keep the first version simple, then evolve it.
+
+```mermaid
+stateDiagram-v2
+  [*] --> CLEAR
+  CLEAR --> MONITORING: valid stream present
+  MONITORING --> WARNING: threshold or trend exceeded
+  WARNING --> CRITICAL: dangerous condition persists
+  CRITICAL --> MITIGATING: mitigation requested
+  MITIGATING --> MONITORING: condition improves
+  MITIGATING --> CRITICAL: mitigation failed
+```
+
+A minimal state machine like this is enough for a strong submission if behavior and evidence are consistent.
+
+## Typical Scenario Timeline
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant SRC as Source Replay
+  participant K as KUKSA Stack
+  participant V as VSS uProtocol Publisher
+  participant G as Guardian
+  participant F as Fault Injector
+  participant O as OpenSOVD
+  participant E as Evidence
+
+  SRC->>K: replay CAN frames
+  K->>V: mapped VSS values
+  V->>G: uProtocol signal events
+  G->>E: baseline state events
+
+  F->>V: inject stuck-value behavior
+  V->>G: faulty stream
+  G->>G: anomaly detection
+  G->>E: fault and mitigation events
+  G->>O: DFM record write
+  O->>E: diagnostics confirmation
+  E->>E: verdict generation
+```
+
+This is the pattern you should be able to reproduce for each campaign variant.
+
+## Fault Classes to Cover
+
+Your campaign set should include:
+
+| Class | Examples |
+|-------|----------|
+| **Transport** | delay · duplicate · drop · reorder |
+| **Signal** | stuck value · spike · drift · out-of-range |
+| **Source** | dropout · replay interruption |
+| **Diagnostics** | delayed DFM write · partial OpenSOVD visibility |
+
+## Suggested Challenge Levels
+
+Use these levels to scope progress and communicate maturity:
+
+| Level | Milestone | Description |
+|:-----:|-----------|-------------|
+| ⭐ | **Baseline** | Stable nominal behavior, end-to-end signal flow |
+| ⭐⭐ | **Single-layer faults** | One transport + one signal fault with measurable response |
+| ⭐⭐⭐ | **Combined faults** | Multi-fault scenarios with full diagnostics correlation |
+| ⭐⭐⭐⭐ | **Remote reruns** | openDuT-triggered campaigns with consistency proof |
+| ⭐⭐⭐⭐⭐ | **Blueprint** | Reusable package another team can execute |
+
+## Bonus Behavior
+
+🎯 **Bonus credit** if Guardian is implemented with S-CORE aligned patterns while maintaining:
+
+- Portability across environments
+- Contract stability over time
+- Full traceability of evidence
+- Reproducibility of verdicts
+
+## Recommended Demo Criteria
+
+A good final demo is short and evidence-driven:
+
+1. **Baseline run** → nominal behavior confirmed
+2. **Transport fault** → e.g., delayed message, measurable detection
+3. **Signal fault** → e.g., stuck value, state transition triggered
+4. **Diagnostics correlation** → DFM record ↔ OpenSOVD exposure
+5. **Remote rerun** → same scenario via openDuT, consistent verdict
+6. **Verdict report** → clear PASS / FAIL / INCONCLUSIVE with evidence links
+
+## Definition of Done
+
+A complete solution should satisfy all of the following:
+
+- [ ] Guardian receives VSS data through uProtocol
+- [ ] Fault campaigns are deterministic and replayable
+- [ ] Detection and mitigation timing is measurable
+- [ ] DFM records exist for faulted scenarios
+- [ ] OpenSOVD exposes matching diagnostics
+- [ ] Evidence chain is complete: hazard → safety goal → fault → detection → mitigation → verdict
+- [ ] openDuT can trigger remote reruns
+- [ ] Ankaios manages the final orchestrated run
+- [ ] Another team can replay scenarios with minimal setup changes
+
+## What Not to Do
+
+| ❌ Avoid | Why |
+|----------|-----|
+| Coupling Guardian to CAN decoding internals | Breaks portability |
+| Bypassing uProtocol for Guardian input | Violates architecture rule |
+| Hard-coding machine-specific assumptions | Prevents reproducibility |
+| Publishing verdicts without diagnostics | Evidence chain incomplete |
+| Relying on one-off manual runs | Cannot be replayed |
+| Hiding failed scenarios | Undermines safety argument |
+
+## Student Quick Start
+
+If you are starting from scratch, use this sequence:
+
+1. Get baseline replay running end-to-end.
+2. Validate CAN decode and VSS mapping.
+3. Publish mapped VSS values over uProtocol.
+4. Subscribe Guardian and verify state behavior.
+5. Inject one transport fault and one signal fault.
+6. Add DFM and OpenSOVD correlation checks.
+7. Rerun one scenario remotely using openDuT.
+8. Generate a final evidence-backed verdict report.
+
+## Suggested Submission Structure
+
+```text
+submission/
+  architecture/
+  campaigns/
+  mappings/
+  runtime/
+  diagnostics/
+  evidence/
+  demo/
+  README.md
+```
+
+## Projects in Scope
+
+| Project | Role |
+|---------|------|
+| **openDuT** | Remote fault campaign orchestration |
+| **uProtocol** | Service-layer messaging |
+| **Ankaios** | Workload lifecycle management |
+| **OpenSOVD** | Diagnostic exposure |
+| **KUKSA** | CAN Provider + Data Broker |
+| **AutoSD** | HPC runtime target |
+| **S-CORE** | Safety-aligned patterns (bonus) |
+| **SDV Blueprints** | Reusable packaging format |
 
 ## Prerequisites
-- Basic Rust,C++ or Python
-- Linux and container fundamentals
-- Pub/sub messaging concepts
 
-## Suggested Deliverables
-- Working Guardian deployment with supervised runtime behavior.
-- Fault injection campaign definitions and replay scripts.
-- Detection and mitigation metrics (for example: detection latency, mitigation success rate, warning lead time).
-- Evidence package per scenario with a clear pass/fail verdict.
-- Reusable SDV Blueprint bundle (architecture, configs, scripts, evidence format).
+- 🦀 Basic **Rust** or 🐍 **Python**
+- 🐧 Linux and containers
+- 📡 Pub/sub messaging basics
 
-## Evaluation Focus
-- Safety correctness: does the system detect and mitigate in time?
-- Traceability: can each verdict be traced through the full evidence chain?
-- Repeatability: can fault campaigns be replayed consistently?
-- Observability: are diagnostics complete and useful across layers?
-- Reusability: can other teams adopt your blueprint with minimal effort?
+## Final Question
 
-## Getting Started in This Repository
-- Use [Safety_Evidence_Hackathon.drawio](./Docs/Safety_Evidence_Hackathon.drawio) as the reference architecture diagram.
+Can your Guardian detect and react safely when thermal data is unreliable, and can you prove that verdict with traceable evidence another team can reproduce?
 
-## Tagline
-Every fault leaves evidence. Solve the case.
-
+If yes, you solved Doctor Whodunit.
