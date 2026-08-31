@@ -170,12 +170,14 @@ Use these levels to scope progress and communicate maturity:
 
 ## Bonus Behavior
 
-🎯 **Bonus credit** if Guardian is implemented with S-CORE aligned patterns while maintaining:
+🎯 **Bonus credits are optional and independent.**
 
-- Portability across environments
-- Contract stability over time
-- Full traceability of evidence
-- Reproducibility of verdicts
+Teams may complete either one, or both:
+
+- **Bonus A:** Guardian implemented using S-CORE aligned patterns
+- **Bonus B:** Implementation runs successfully on AutoSD
+
+If both are completed, teams receive both bonus credits.
 
 ## Recommended Demo Criteria
 
@@ -244,14 +246,14 @@ submission/
 
 | Project | Role |
 |---------|------|
-| **openDuT** | Remote fault campaign orchestration |
-| **uProtocol** | Service-layer messaging |
-| **Ankaios** | Workload lifecycle management |
-| **OpenSOVD** | Diagnostic exposure |
-| **KUKSA** | CAN Provider + Data Broker |
-| **AutoSD** | HPC runtime target |
-| **S-CORE** | Safety-aligned patterns (bonus) |
-| **SDV Blueprints** | Reusable packaging format |
+| [**openDuT**](https://github.com/eclipse-opendut/opendut) | Remote fault campaign orchestration |
+| [**uProtocol**](https://github.com/eclipse-uprotocol) | Service-layer messaging |
+| [**Ankaios**](https://github.com/eclipse-ankaios/ankaios) | Workload lifecycle management |
+| [**OpenSOVD**](https://github.com/eclipse-opensovd) | Diagnostic exposure |
+| [**KUKSA**](https://github.com/eclipse-kuksa) | CAN Provider + Data Broker |
+| [**AutoSD**](https://sig.centos.org/automotive/autosd-10/) | HPC runtime target |
+| [**S-CORE**](https://github.com/eclipse-score) | Safety-aligned patterns (bonus) |
+| [**SDV Blueprints**](https://sdv-blueprints.eclipse.dev/) | Reusable packaging format |
 
 ## Prerequisites
 
