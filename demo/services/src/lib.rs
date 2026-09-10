@@ -1,5 +1,7 @@
 //! Shared types, URI builders, and transport helpers.
 
+pub mod fault_reporter;
+
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -104,6 +106,11 @@ pub async fn open_up_transport(
         config
             .insert_json5("connect/endpoints", &format!("[\"{}\"]", endpoint))
             .map_err(|e| anyhow::anyhow!("Zenoh config: {}", e))?;
+    }
+    if let Ok(endpoint) = std::env::var("ZENOH_LISTEN") {
+        config
+            .insert_json5("listen/endpoints", &format!("[\"{}\"]", endpoint))
+            .map_err(|e| anyhow::anyhow!("Zenoh listen config: {}", e))?;
     }
     let transport = UPTransportZenoh::builder(uri_provider.get_authority())
         .expect("invalid authority name")

@@ -15,9 +15,17 @@ path = "src/bin/temp_publisher.rs"
 name = "vss_bridge"
 path = "src/bin/vss_bridge.rs"
 
+[[bin]]
+name = "fault_injector"
+path = "src/bin/fault_injector.rs"
+
 [dependencies]
 tokio        = { version = "1", features = ["full"] }
 async-trait  = "0.1"
+
+# DFM fault reporting (Diagnostic Fault Manager via iceoryx2 IPC)
+fault_lib = { path = "../fault-lib/src/fault_lib" }
+common    = { path = "../fault-lib/src/common" }
 
 # uProtocol over Zenoh
 up-rust            = "0.9"
