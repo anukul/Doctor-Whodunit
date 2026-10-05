@@ -10,7 +10,7 @@ Travel your system's timeline: inject faults you've seen before or expect in the
 
 Build a safety evidence factory around the Battery Thermal Guardian — an EV thermal-runaway early-warning service. Regulations require occupants be warned minutes before a battery thermal event turns dangerous, so a stale or stuck cell-temperature signal silently disarms the entire warning chain.
 
-Run the Guardian on an AutoSD-based runtime, supervised by Ankaios, exchanging heartbeat, fault, and mitigation events over uProtocol, with diagnostic truth exposed through OpenSOVD. openDuT replays repeatable fault campaigns at three levels — delayed or duplicated messages, stuck or implausible VSS signals, even device-level sensor dropout — while your evidence collector links hazard → safety goal → injected fault → detection → mitigation → verdict for every test, packaged as a reusable SDV Blueprint.
+Run the Guardian on an AutoSD-based runtime, supervised by Ankaios, exchanging heartbeat, fault, and mitigation events over uProtocol, with diagnostic truth exposed through OpenSOVD. Repeatable fault campaigns cover delayed or duplicated messages, stuck or implausible VSS signals, and device-level sensor dropout, while your evidence collector links hazard → safety goal → injected fault → detection → mitigation → verdict for every test, packaged as a reusable SDV Blueprint.
 
 Doctor Whodunit is therefore not only a detection challenge. It is an evidence challenge. For every scenario, your team should be able to show what fault was injected, what the system observed, which mitigation was triggered, and why the final verdict is PASS, FAIL, or INCONCLUSIVE.
 
@@ -22,13 +22,11 @@ Build a portable Safety Evidence Factory around the Battery Thermal Guardian.
 
 A strong solution demonstrates repeatable fault campaigns, correct Guardian behavior, clear diagnostics, and evidence-backed verdicts that another team can reproduce.
 
-## Target Architecture
+## Example  Architecture
 
-The key architecture rule is simple:
+The architecture rule is simple:
 
-VSS data must pass through a uProtocol service interface before reaching the Guardian.
-
-Guardian should not be tightly coupled to direct Data Broker reads.
+VSS data must pass through a uProtocol service interface before reaching the Guardian. Guardian should not be tightly coupled to direct Data Broker reads.
 
 ```mermaid
 flowchart LR
@@ -37,16 +35,12 @@ flowchart LR
   KDB --> VSSUP[VSS uProtocol Publisher Service]
   VSSUP -->|uProtocol publish| G[Battery Thermal Guardian]
 
-  OD[openDuT remote orchestration] --> FI[Fault campaign runner]
-  FI -->|inject signal faults| VSSUP
-  FI -->|inject transport faults| UBUS[uProtocol channels]
+  FI[Fault Campaign Runner] -->|inject signal faults| VSSUP
 
-  G -->|state, fault, mitigation events| UBUS
   G --> DFM[DFM fault records]
   DFM --> SOVD[OpenSOVD]
 
-  UBUS --> EV[Evidence collector]
-  SOVD --> EV
+  SOVD --> EV[Evidence collector]
 ```
 
 This keeps service contracts stable while allowing transport and deployment details to change without rewriting business logic.
@@ -63,7 +57,7 @@ Your implementation should connect the following building blocks into one cohere
 | **Evaluate** | Battery Thermal Guardian (Rust) | Thermal risk state machine |
 | **Orchestrate** | Ankaios | Workload lifecycle, AutoSD HPC target |
 | **Diagnose** | DFM → OpenSOVD | Fault records and diagnostic exposure |
-| **Campaign** | openDuT | Remote, repeatable fault injection |
+| **Campaign** | Fault campaign runner | Repeatable fault injection |
 | **Collect** | Evidence collector | Correlates metadata → events → diagnostics → verdict |
 
 ## Development Journey
@@ -92,12 +86,11 @@ Build incrementally instead of trying to solve everything at once.
 > - Tie runtime events back with correlation identifiers
 
 **Phase 4 — Remote Reruns**
-> - Execute selected scenarios remotely with openDuT
+> - Execute selected scenarios remotely
 > - Compare verdict consistency across reruns
 
-**Phase 5 — Orchestrated Demo**
-> - Run full system under Ankaios orchestration
-> - Demonstrate restart/recovery without breaking evidence integrity
+**Phase 5 — Blueprint**
+> - Reusable package another team can execute
 
 ## Suggested Guardian Behavior
 
@@ -187,7 +180,7 @@ A good final demo is short and evidence-driven:
 2. **Transport fault** → e.g., delayed message, measurable detection
 3. **Signal fault** → e.g., stuck value, state transition triggered
 4. **Diagnostics correlation** → DFM record ↔ OpenSOVD exposure
-5. **Remote rerun** → same scenario via openDuT, consistent verdict
+5. **Remote rerun** → same scenario via remote framework, consistent verdict
 6. **Verdict report** → clear PASS / FAIL / INCONCLUSIVE with evidence links
 
 ## Definition of Done
@@ -200,7 +193,7 @@ A complete solution should satisfy all of the following:
 - [ ] DFM records exist for faulted scenarios
 - [ ] OpenSOVD exposes matching diagnostics
 - [ ] Evidence chain is complete: hazard → safety goal → fault → detection → mitigation → verdict
-- [ ] openDuT can trigger remote reruns
+- [ ] Trigger remote reruns
 - [ ] Ankaios manages the final orchestrated run
 - [ ] Another team can replay scenarios with minimal setup changes
 
@@ -225,7 +218,7 @@ If you are starting from scratch, use this sequence:
 4. Subscribe Guardian and verify state behavior.
 5. Inject one transport fault and one signal fault.
 6. Add DFM and OpenSOVD correlation checks.
-7. Rerun one scenario remotely using openDuT.
+7. Rerun different scenario remotely.
 8. Generate a final evidence-backed verdict report.
 
 ## Suggested Submission Structure
@@ -246,7 +239,6 @@ submission/
 
 | Project | Role |
 |---------|------|
-| [**openDuT**](https://github.com/eclipse-opendut/opendut) | Remote fault campaign orchestration |
 | [**uProtocol**](https://github.com/eclipse-uprotocol) | Service-layer messaging |
 | [**Ankaios**](https://github.com/eclipse-ankaios/ankaios) | Workload lifecycle management |
 | [**OpenSOVD**](https://github.com/eclipse-opensovd) | Diagnostic exposure |
