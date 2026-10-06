@@ -253,3 +253,9 @@ rustc-ice-*.txt
 # ---------------------------------------------------------------------------
 .DS_Store
 Thumbs.db
+
+# OpenSOVD CLI source modules (not Python build outputs)
+!demo/opensovd-core/opensovd-cli/lib/
+!demo/opensovd-core/opensovd-cli/lib/**
+!demo/opensovd-core/opensovd-cli/build/
+!demo/opensovd-core/opensovd-cli/build/**
