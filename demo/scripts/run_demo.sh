@@ -99,7 +99,7 @@ PIDS+=($!)
 wait_http "http://127.0.0.1:8080/health" "Guardian"
 
 log "starting OpenSOVD gateway ..."
-"$GATEWAY_BIN" --dfm-fault-app battery_guardian >"$RUN_DIR/gateway.log" 2>&1 &
+"$GATEWAY_BIN" --url "$GATEWAY_URL/sovd" --dfm-fault-app battery_guardian >"$RUN_DIR/gateway.log" 2>&1 &
 PIDS+=($!)
 wait_http "$GATEWAY_URL/sovd/v1/apps/battery_guardian/faults" "OpenSOVD gateway"
 

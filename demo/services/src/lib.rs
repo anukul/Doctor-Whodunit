@@ -103,6 +103,10 @@ pub async fn open_up_transport(
     UPTransportZenoh::try_init_log_from_env();
     let mut config = zenoh::Config::default();
     if let Ok(endpoint) = std::env::var("ZENOH_CONNECT") {
+        // An explicit route must not be bypassed by peer discovery.
+        config
+            .insert_json5("mode", "\"client\"")
+            .map_err(|e| anyhow::anyhow!("Zenoh mode config: {}", e))?;
         config
             .insert_json5("connect/endpoints", &format!("[\"{}\"]", endpoint))
             .map_err(|e| anyhow::anyhow!("Zenoh config: {}", e))?;

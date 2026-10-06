@@ -16,13 +16,13 @@ Library           SovdFaultLibrary
 Suite Setup       Opensovd Lists All Catalog Faults    5
 Suite Teardown    Write Evidence Report
 Test Setup        Reset To Clean Baseline
+Test Teardown     Cleanup Scenario
 
 *** Test Cases ***
 Baseline Has No Active Faults
     [Documentation]    A safe temperature ramp raises no faults.
-    Inject Scenario    nominal
     ${active}=    Wait For Clear    timeout=8
-    Record Scenario    Baseline    Nominal temperature ramp (30..44 C)    ${EMPTY}    PASS
+    Record Scenario    Baseline    Continuous healthy temperature stream (30..39 C)    ${EMPTY}    PASS
 
 Overtemperature Raises Warning And Critical
     [Documentation]    Ramp through 45 C and 55 C -> warning + critical faults.

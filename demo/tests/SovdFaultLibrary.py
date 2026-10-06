@@ -101,6 +101,8 @@ class SovdFaultLibrary:
         self.proxy_name = proxy_name
         self.report = os.path.abspath(report)
         self._evidence = []
+        self._baseline_process = None
+        self._transport_process = None
 
     # ------------------------------------------------------------------ SOVD
     @property
@@ -160,11 +162,48 @@ class SovdFaultLibrary:
 
     def inject_scenario(self, scenario):
         """Run a signal-shaping scenario to completion over the direct link."""
+        self.stop_publishers()
         self._run_injector(scenario, self.zenoh_direct)
 
     def establish_baseline(self):
         """Feed a nominal series so the watchdog sees fresh data (no faults)."""
-        self._run_injector("nominal", self.zenoh_direct)
+        self.stop_publishers()
+        self._baseline_process = self._run_injector(
+            "stream", self.zenoh_direct, background=True, extra_env={"STEPS": "2000"}
+        )
+        # Confirm live, changing input before accepting an all-clear snapshot.
+        seen = set()
+        deadline = time.monotonic() + 15
+        guardian_url = os.environ.get("GUARDIAN_HTTP", "http://127.0.0.1:8080")
+        while time.monotonic() < deadline:
+            if self._baseline_process.poll() is not None:
+                raise AssertionError("healthy baseline publisher exited")
+            response = requests.get(f"{guardian_url}/state", timeout=5)
+            response.raise_for_status()
+            state = response.json()
+            value = state.get("temp_max", 0)
+            if 30 <= value <= 39 and state.get("state") == "MONITORING":
+                seen.add(value)
+            if len(seen) >= 2 and not self.get_active_faults():
+                return
+            time.sleep(0.2)
+        raise AssertionError("healthy baseline did not reach Guardian and clear diagnostics")
+
+    def stop_publishers(self):
+        for name in ("_baseline_process", "_transport_process"):
+            proc = getattr(self, name, None)
+            if proc is not None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=5)
+                setattr(self, name, None)
+
+    def cleanup_scenario(self):
+        self.remove_zenoh_blackhole()
+        self.stop_publishers()
 
     # ----------------------------------------------------------- transport fx
     def _toxic_url(self):
@@ -200,19 +239,17 @@ class SovdFaultLibrary:
         confirms it flows, then blackholes the link so no fresh samples reach
         the Guardian -- the freshness watchdog must then raise the stale fault.
         """
-        proc = self._run_injector("stream", self.zenoh_proxy, background=True)
-        try:
-            time.sleep(2.0)  # let the stream flow and clear any prior staleness
-            self.add_zenoh_blackhole()
-            time.sleep(3.5)  # exceed the 2 s freshness deadline
-        finally:
-            self.remove_zenoh_blackhole()
-            if proc is not None:
-                proc.terminate()
-                try:
-                    proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
+        self.stop_publishers()
+        self._transport_process = self._run_injector(
+            "stream", self.zenoh_proxy, background=True, extra_env={"STEPS": "2000"}
+        )
+        time.sleep(2.0)
+        if self._transport_process.poll() is not None:
+            raise AssertionError("transport scenario publisher exited before injection")
+        self.wait_for_clear(timeout=8)
+        self.add_zenoh_blackhole()
+        # Keep publisher and toxic alive through assertions and evidence capture.
+        # Test teardown removes the toxic and stops the publisher.
 
     # -------------------------------------------------------------- polling
     def wait_for_active_faults(self, *expected, timeout=15, poll=0.5):
@@ -220,9 +257,11 @@ class SovdFaultLibrary:
         if len(expected) == 1 and not isinstance(expected[0], str):
             expected = expected[0]
         expected = set(expected)
-        deadline = time.time() + float(timeout)
+        deadline = time.monotonic() + float(timeout)
         active = []
-        while time.time() < deadline:
+        while time.monotonic() < deadline:
+            if self._transport_process is not None and self._transport_process.poll() is not None:
+                raise AssertionError("transport publisher exited before fault confirmation")
             active = self.get_active_faults()
             if expected.issubset(set(active)):
                 logger.info(f"observed expected faults active: {sorted(expected)}")
@@ -234,9 +273,9 @@ class SovdFaultLibrary:
 
     def wait_for_clear(self, timeout=10, poll=0.5):
         """Wait until no fault is active."""
-        deadline = time.time() + float(timeout)
+        deadline = time.monotonic() + float(timeout)
         active = self.get_active_faults()
-        while time.time() < deadline:
+        while time.monotonic() < deadline:
             active = self.get_active_faults()
             if not active:
                 return []

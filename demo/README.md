@@ -86,4 +86,24 @@ that otherwise-valid samples stop reaching the Guardian.
 
 - Rust toolchain, `protoc` (`protobuf-compiler`) for the KUKSA proto build
 - Python 3 with `robotframework` and `requests` (`pip install robotframework requests`)
-- Toxiproxy binaries in `.tools/` (bundled)
+- Toxiproxy binaries for your OS/architecture in `.tools/` (not included in Git).
+
+## Validation
+
+DFM, OpenSOVD gateway, Guardian, and the injector build and run natively on Apple
+Silicon macOS; Docker/Linux is optional. Install the dependencies above and the
+Rust toolchain pinned by `opensovd-core/rust-toolchain.toml`, then run
+`bash scripts/run_demo.sh` from `demo/`.
+
+The native macOS suite passes all six scenarios. Selecting client mode when
+`ZENOH_CONNECT` specifies an endpoint keeps the injector on the configured route;
+the transport test was verified using Toxiproxy on port 7448 without a direct
+connection to Guardian on port 7447. The native check used separate HTTP ports
+because the default ports were already occupied. The Linux ARM64 suite also
+passed 6/6. These results cover synthetic uProtocol input → Guardian → DFM →
+OpenSOVD, not the complete challenge.
+
+## AI Assistance
+
+This document was updated with the assistance of **Codex** using the model
+**GPT-6.1 Sol** (`gpt-6.1-sol`).
